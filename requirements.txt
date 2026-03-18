@@ -1,0 +1,23 @@
+# Core dependencies
+pandas>=2.0.0
+numpy>=1.24.0
+
+# MT Evaluation Metrics
+sacrebleu>=2.3.1
+
+# Visualization
+plotly>=5.18.0
+kaleido>=0.2.1
+
+# Progress bars
+tqdm>=4.66.0
+
+ctranslate2>=3.22.0
+git+https://github.com/michsethowusu/py-googletrans.git 
+
+google-generativeai
+openai
+python-dotenv
+anthropic
+nest_asyncio>=1.5.0
+google-genai
