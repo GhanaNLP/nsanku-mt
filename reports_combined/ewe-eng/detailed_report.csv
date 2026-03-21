@@ -1,0 +1,9 @@
+Model,Similarity Score (%),Raw Score
+googletrans,80.46%,80.45866966247559
+gemini-3.1-pro-preview,78.59%,78.59431457519531
+gemini-2.5-pro,75.58%,75.58206176757812
+gemini-2.5-flash,75.05%,75.046630859375
+gemini-3.1-flash-lite-preview,72.55%,72.55322265625
+nllb-200-distilled-1.3B-ct2-int8,54.81%,54.80746459960938
+claude-opus-4-6,54.32%,54.32433223724365
+claude-sonnet-4-6,41.99%,41.989073753356934

@@ -1,0 +1,15 @@
+Translation Benchmark Results for twi-eng
+Generated on: 2026-03-21 07:59:08
+
+Model Performance:
+gemini-3.1-pro-preview: 86.32%
+googletrans: 81.03%
+gemini-2.5-pro: 75.76%
+gemini-3.1-flash-lite-preview: 72.72%
+gemini-2.5-flash: 72.59%
+claude-opus-4-6: 70.93%
+claude-sonnet-4-6: 67.12%
+nllb-200-distilled-1.3B-ct2-int8: 49.07%
+
+Best Model: gemini-3.1-pro-preview (86.32%)
+Average Score: 71.94%
