@@ -1,0 +1,27 @@
+{
+  "timestamp": "2026-03-21T07:59:08.404494",
+  "total_language_pairs": 2,
+  "total_models": 8,
+  "model_performance": {
+    "gemini-2.5-pro": 75.67012023925781,
+    "gemini-2.5-flash": 73.8194580078125,
+    "gemini-3.1-flash-lite-preview": 72.63502502441406,
+    "gemini-3.1-pro-preview": 82.45511627197266,
+    "nllb-200-distilled-1.3B-ct2-int8": 51.93624496459961,
+    "claude-sonnet-4-6": 54.55332899093628,
+    "googletrans": 80.7431287765503,
+    "claude-opus-4-6": 62.6267352104187
+  },
+  "language_performance": {
+    "ewe-eng": 66.6694712638855,
+    "twi-eng": 71.94031810760498
+  },
+  "best_overall_model": "gemini-3.1-pro-preview",
+  "best_overall_score": 82.45511627197266,
+  "best_language": "twi-eng",
+  "best_language_score": 71.94031810760498,
+  "language_pairs": [
+    "ewe-eng",
+    "twi-eng"
+  ]
+}
