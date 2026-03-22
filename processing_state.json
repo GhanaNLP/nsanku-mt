@@ -78,5 +78,140 @@
     "translation_completed": true,
     "rows_processed": 200,
     "timestamp": "2026-03-21T07:32:35.661349"
+  },
+  "twi-eng/twi-eng.csv/deepseek-ai_deepseek-v3.2": {
+    "translation_completed": true,
+    "rows_processed": 200,
+    "timestamp": "2026-03-21T09:55:32.958979"
+  },
+  "twi-eng/twi-eng.csv/google_gemma-3-1b-it": {
+    "translation_completed": true,
+    "rows_processed": 200,
+    "timestamp": "2026-03-21T09:59:43.231382"
+  },
+  "twi-eng/twi-eng.csv/google_gemma-3-27b-it": {
+    "translation_completed": true,
+    "rows_processed": 200,
+    "timestamp": "2026-03-21T10:08:03.527320"
+  },
+  "twi-eng/twi-eng.csv/openai_gpt-oss-120b": {
+    "translation_completed": true,
+    "rows_processed": 200,
+    "timestamp": "2026-03-21T10:12:25.062825"
+  },
+  "twi-eng/twi-eng.csv/moonshotai_kimi-k2.5": {
+    "translation_completed": true,
+    "rows_processed": 200,
+    "timestamp": "2026-03-21T14:35:35.103809"
+  },
+  "twi-eng/twi-eng.csv/moonshotai_kimi-k2-instruct-0905": {
+    "translation_completed": true,
+    "rows_processed": 200,
+    "timestamp": "2026-03-21T15:21:36.337809"
+  },
+  "twi-eng/twi-eng.csv/meta_llama-3.1-405b-instruct": {
+    "translation_completed": true,
+    "rows_processed": 200,
+    "timestamp": "2026-03-21T15:41:49.758153"
+  },
+  "twi-eng/twi-eng.csv/minimaxai_minimax-m2.1": {
+    "translation_completed": true,
+    "rows_processed": 200,
+    "timestamp": "2026-03-21T17:09:23.273957"
+  },
+  "twi-eng/twi-eng.csv/meta_llama-4-maverick-17b-128e-instruct": {
+    "translation_completed": true,
+    "rows_processed": 200,
+    "timestamp": "2026-03-21T17:24:09.264963"
+  },
+  "twi-eng/twi-eng.csv/mistralai_mistral-large-3-675b-instruct-2512": {
+    "translation_completed": true,
+    "rows_processed": 200,
+    "timestamp": "2026-03-21T17:40:13.538081"
+  },
+  "twi-eng/twi-eng.csv/qwen_qwen3.5-397b-a17b": {
+    "translation_completed": true,
+    "rows_processed": 200,
+    "timestamp": "2026-03-21T17:56:27.608462"
+  },
+  "twi-eng/twi-eng.csv/meta_llama-3.2-1b-instruct": {
+    "translation_completed": true,
+    "rows_processed": 200,
+    "timestamp": "2026-03-21T18:24:41.951661"
+  },
+  "twi-eng/twi-eng.csv/gemini-3-flash-preview": {
+    "translation_completed": true,
+    "rows_processed": 200,
+    "timestamp": "2026-03-21T18:39:41.961066"
+  },
+  "twi-eng/twi-eng.csv/gpt-5.1": {
+    "translation_completed": true,
+    "rows_processed": 200,
+    "timestamp": "2026-03-21T19:06:46.561095"
+  },
+  "ewe-eng/ewe-eng.csv/deepseek-ai_deepseek-v3.2": {
+    "translation_completed": true,
+    "rows_processed": 200,
+    "timestamp": "2026-03-21T20:31:08.855881"
+  },
+  "ewe-eng/ewe-eng.csv/google_gemma-3-1b-it": {
+    "translation_completed": true,
+    "rows_processed": 200,
+    "timestamp": "2026-03-21T20:45:54.868155"
+  },
+  "ewe-eng/ewe-eng.csv/google_gemma-3-27b-it": {
+    "translation_completed": true,
+    "rows_processed": 200,
+    "timestamp": "2026-03-21T21:00:40.843469"
+  },
+  "ewe-eng/ewe-eng.csv/openai_gpt-oss-120b": {
+    "translation_completed": true,
+    "rows_processed": 200,
+    "timestamp": "2026-03-21T21:17:00.428520"
+  },
+  "ewe-eng/ewe-eng.csv/moonshotai_kimi-k2-instruct-0905": {
+    "translation_completed": true,
+    "rows_processed": 200,
+    "timestamp": "2026-03-21T21:31:46.422367"
+  },
+  "ewe-eng/ewe-eng.csv/meta_llama-3.1-405b-instruct": {
+    "translation_completed": true,
+    "rows_processed": 200,
+    "timestamp": "2026-03-21T21:47:59.219945"
+  },
+  "ewe-eng/ewe-eng.csv/minimaxai_minimax-m2.1": {
+    "translation_completed": true,
+    "rows_processed": 200,
+    "timestamp": "2026-03-21T23:17:41.252451"
+  },
+  "ewe-eng/ewe-eng.csv/meta_llama-4-maverick-17b-128e-instruct": {
+    "translation_completed": true,
+    "rows_processed": 200,
+    "timestamp": "2026-03-21T23:32:27.267322"
+  },
+  "ewe-eng/ewe-eng.csv/mistralai_mistral-large-3-675b-instruct-2512": {
+    "translation_completed": true,
+    "rows_processed": 200,
+    "timestamp": "2026-03-21T23:48:13.685883"
+  },
+  "ewe-eng/ewe-eng.csv/qwen_qwen3.5-397b-a17b": {
+    "translation_completed": true,
+    "rows_processed": 200,
+    "timestamp": "2026-03-22T00:05:16.666797"
+  },
+  "ewe-eng/ewe-eng.csv/meta_llama-3.2-1b-instruct": {
+    "translation_completed": true,
+    "rows_processed": 200,
+    "timestamp": "2026-03-22T00:20:22.740698"
+  },
+  "ewe-eng/ewe-eng.csv/gemini-3-flash-preview": {
+    "translation_completed": true,
+    "rows_processed": 200,
+    "timestamp": "2026-03-22T00:53:44.533095"
+  },
+  "ewe-eng/ewe-eng.csv/gpt-5.1": {
+    "translation_completed": true,
+    "rows_processed": 200,
+    "timestamp": "2026-03-22T01:08:30.511844"
   }
 }

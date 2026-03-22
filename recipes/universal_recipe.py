@@ -3,6 +3,9 @@ import time
 import os
 import re
 import requests
+import concurrent.futures
+import threading
+from datetime import datetime
 from openai import OpenAI
 import google.generativeai as genai
 from sentence_transformers import SentenceTransformer, util
@@ -77,20 +80,44 @@ def translate_llm(client, text, source_lang, target_lang, model_id, provider, ma
                 response_text = response.text
             else:
                 # Standard OpenAI compatible format (NVIDIA, OpenAI, Mistral, Perplexity)
-                completion = client.chat.completions.create(
-                    model=model_id,
-                    messages=[{"role": "user", "content": prompt}],
-                    temperature=0.3,
-                    max_tokens=2024,
-                    top_p=0.95,
-                    stream=False
-                )
+                api_kwargs = {
+                    "model": model_id,
+                    "messages": [{"role": "user", "content": prompt}],
+                    "stream": False
+                }
+
+                # Dynamically handle parameter requirements based on provider and model
+                if provider == "openai":
+                    # Newer OpenAI models use max_completion_tokens
+                    api_kwargs["max_completion_tokens"] = 2024
+                    # Reasoning models (o1, o3) typically reject temperature and top_p
+                    if not any(r in model_id.lower() for r in ["o1", "o3"]):
+                        api_kwargs["temperature"] = 0.3
+                        api_kwargs["top_p"] = 0.95
+                else:
+                    # Legacy standard format for other providers
+                    api_kwargs["max_tokens"] = 2024
+                    api_kwargs["temperature"] = 0.3
+                    api_kwargs["top_p"] = 0.95
+
+                # Explicitly disable reasoning ONLY for known reasoning models on NVIDIA
+                if provider == "nvidia":
+                    reasoning_keywords = ["deepseek", "kimi", "nemotron", "reasoning", "think", "r1"]
+                    if any(keyword in model_id.lower() for keyword in reasoning_keywords):
+                        api_kwargs["extra_body"] = {
+                            "chat_template_kwargs": {
+                                "thinking": False
+                            }
+                        }
+
+                completion = client.chat.completions.create(**api_kwargs)
                 response_text = completion.choices[0].message.content
 
             return extract_bracketed_text(response_text)
 
         except Exception as e:
-            print(f"Attempt {attempt+1} failed for text '{text[:20]}...': {str(e)}")
+            ts = datetime.now().strftime('%H:%M:%S')
+            print(f"[{ts}] Attempt {attempt+1} failed for text '{text[:20]}...': {str(e)}")
             if attempt < max_retries - 1:
                 time.sleep((2 ** attempt) + 1)
             else:
@@ -153,12 +180,11 @@ def translation_only(df, source_lang, target_lang, model_id, provider):
         'gaa': 'gaa',
     }
 
-    # 0. Handle NLLB via the high-throughput API (Replaces local model loading)
+    # 0. Handle NLLB via the high-throughput API
     if provider in ["nllb", "nllb-api", "nllb-ct2"]:
         src_bcp47 = NLLB_LANG_MAP.get(source_lang, f"{source_lang}_Latn")
         tgt_bcp47 = NLLB_LANG_MAP.get(target_lang, f"{target_lang}_Latn")
 
-        # Allow environment variable override for self-hosted instances
         api_base_url = os.getenv("NLLB_API_URL", "https://winstxnhdw-nllb-api.hf.space")
         endpoint = f"{api_base_url.rstrip('/')}/api/v4/translator"
         
@@ -166,10 +192,10 @@ def translation_only(df, source_lang, target_lang, model_id, provider):
 
         for i, row in result_df.iterrows():
             text = row['text']
-            print(f"Translating {i+1}/{total_texts}: {text[:50]}...")
+            ts = datetime.now().strftime('%H:%M:%S')
+            print(f"[{ts}] Translating {i+1}/{total_texts}: {text[:50]}...")
             
             try:
-                # The API expects text, source, and target as query parameters
                 params = {
                     "text": text,
                     "source": src_bcp47,
@@ -179,7 +205,6 @@ def translation_only(df, source_lang, target_lang, model_id, provider):
                 response = requests.get(endpoint, params=params, timeout=30)
                 response.raise_for_status()
                 
-                # Robustly parse response whether it returns plain text or JSON
                 try:
                     data = response.json()
                     if isinstance(data, dict):
@@ -187,10 +212,8 @@ def translation_only(df, source_lang, target_lang, model_id, provider):
                     else:
                         translation = str(data)
                 except ValueError:
-                    # If not valid JSON, treat as plain text
                     translation = response.text.strip()
                     
-                # Clean up stray quotes if the API returned a raw JSON string
                 if translation.startswith('"') and translation.endswith('"'):
                     translation = translation[1:-1]
                     
@@ -203,7 +226,7 @@ def translation_only(df, source_lang, target_lang, model_id, provider):
 
         return result_df
 
-    # 1. Handle Opus-MT (Retained Local/Transformers Model logic)
+    # 1. Handle Opus-MT
     elif provider == "opus-mt":
         from transformers import pipeline
         import torch
@@ -222,7 +245,8 @@ def translation_only(df, source_lang, target_lang, model_id, provider):
         for batch_start in range(0, total_texts, NLLB_BATCH_SIZE):
             batch_end = min(batch_start + NLLB_BATCH_SIZE, total_texts)
             batch = texts[batch_start:batch_end]
-            print(f"Translating rows {batch_start+1}–{batch_end}/{total_texts}...")
+            ts = datetime.now().strftime('%H:%M:%S')
+            print(f"[{ts}] Translating rows {batch_start+1}–{batch_end}/{total_texts}...")
             try:
                 results = translator(batch, batch_size=len(batch))
                 for j, res in enumerate(results):
@@ -245,7 +269,7 @@ def translation_only(df, source_lang, target_lang, model_id, provider):
         result_df['translated'] = translations
         return result_df
 
-    # 2. Handle Google Translate (Free API via py-googletrans)
+    # 2. Handle Google Translate
     elif provider == "googletrans":
         from googletrans import Translator
         import asyncio
@@ -263,7 +287,8 @@ def translation_only(df, source_lang, target_lang, model_id, provider):
 
         for i, row in result_df.iterrows():
             text = row['text']
-            print(f"Translating {i+1}/{total_texts}: {text[:50]}...")
+            ts = datetime.now().strftime('%H:%M:%S')
+            print(f"[{ts}] Translating {i+1}/{total_texts}: {text[:50]}...")
             try:
                 res = asyncio.run(fetch_translation(text, gt_src, gt_tgt))
 
@@ -279,26 +304,79 @@ def translation_only(df, source_lang, target_lang, model_id, provider):
 
         return result_df
 
-    # 3. Handle APIs (LLMs)
+    # 3. Handle APIs (LLMs) with Synchronized Batching
     else:
         client = get_openai_compatible_client(provider) if provider != "gemini" else None
-        delay = 2.0
+        
+        batch_size = 10           # Send 5 requests simultaneously
+        pause_between_batches = 15 # Wait 5 seconds AFTER all 5 have finished
+        stagger_delay = 3      # Brief wait between individual request submissions inside the batch
+        
+        df_lock = threading.Lock()
+        
+        print(f"\n--- Starting synchronized batch processing (Batches of {batch_size}, waiting for ALL to return, then {pause_between_batches}s pause) ---")
+        
+        with concurrent.futures.ThreadPoolExecutor(max_workers=batch_size) as executor:
+            
+            # --- BACKGROUND COLLECTOR ---
+            def collect_result(future, idx):
+                try:
+                    translation = future.result()
+                    with df_lock:
+                        result_df.at[idx, 'translated'] = translation
+                    
+                    ts = datetime.now().strftime('%H:%M:%S')
+                    if translation:
+                        print(f"[{ts}]  → [{idx+1}] Success: {translation[:50]}...")
+                    else:
+                        print(f"[{ts}]  → [{idx+1}] [Translation failed]")
+                except Exception as e:
+                    ts = datetime.now().strftime('%H:%M:%S')
+                    print(f"[{ts}]  → [{idx+1}] [Error]: {e}")
+                    with df_lock:
+                        result_df.at[idx, 'translated'] = ""
 
-        for i, row in result_df.iterrows():
-            text = row['text']
-            print(f"Translating {i+1}/{total_texts}: {text[:50]}...")
-
-            translation = translate_llm(client, text, source_lang, target_lang, model_id, provider)
-            result_df.at[i, 'translated'] = translation
-
-            if translation:
-                print(f"  → {translation[:50]}...")
-            else:
-                print("  → [Translation failed]")
-
-            if i < total_texts - 1:
-                time.sleep(delay)
-
+            # --- MAIN SUBMISSION LOOP ---
+            # Loop through the dataframe in chunks of `batch_size`
+            for i in range(0, total_texts, batch_size):
+                batch_df = result_df.iloc[i:i+batch_size]
+                
+                print(f"\n--- Starting Batch {i//batch_size + 1} (Rows {i+1} to {min(i+batch_size, total_texts)}) ---")
+                
+                # Keep track of the active tasks for this specific batch
+                current_batch_futures = []
+                
+                for idx, row in batch_df.iterrows():
+                    text = row['text']
+                    ts = datetime.now().strftime('%H:%M:%S')
+                    print(f"[{ts}] Submitting {idx+1}/{total_texts}: {text[:30]}...")
+                    
+                    # Submit the task to the pool
+                    future = executor.submit(
+                        translate_llm, client, text, source_lang, target_lang, model_id, provider
+                    )
+                    future.add_done_callback(lambda f, index=idx: collect_result(f, index))
+                    
+                    # Add to our tracker list
+                    current_batch_futures.append(future)
+                    
+                    # Brief stagger so we don't spam 5 requests at the exact same millisecond
+                    time.sleep(stagger_delay)
+                
+                # ---------------------------------------------------------
+                # BLOCKING WAIT: Don't move forward until ALL requests 
+                # in current_batch_futures have returned a response
+                # ---------------------------------------------------------
+                concurrent.futures.wait(current_batch_futures)
+                
+                # Once wait() is done, the entire batch is finished. 
+                # Now we sleep for 5 seconds (unless it's the very last batch).
+                if i + batch_size < total_texts:
+                    ts_pause = datetime.now().strftime('%H:%M:%S')
+                    print(f"[{ts_pause}] --- Batch complete. All responses received. Pausing for {pause_between_batches} seconds ---")
+                    time.sleep(pause_between_batches)
+                    
+        print("\nAll batches submitted and all results collected!")
         return result_df
 
 

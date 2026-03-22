@@ -1,9 +1,3 @@
-"""
-optimized_similarity_calculator_gpu.py
-GPU-optimized version that removes invalid rows entirely and calculates 
-similarity scores only for valid pairs
-"""
-
 import os
 import pandas as pd
 import numpy as np
@@ -23,6 +17,91 @@ BATCH_SIZE = 256  # Increased for GPU (much faster processing)
 DEBUG_MODE = True
 # ==============================================================================
 
+def validate_dataset_globally(csv_files: List[str]) -> List[str]:
+    """
+    Validates at the MODEL (CSV filename) level across all language folders:
+    - A model must exist in ALL language folders found.
+    - A model must not have any empty values in 'translated' or 'ref' columns.
+    """
+    print("\n" + "="*70)
+    print("GLOBAL VALIDATION PHASE")
+    print("="*70)
+    
+    # Group by model (filename)
+    # Format: model_files["model_A.csv"] = [(lang_pair, file_path), ...]
+    model_files = defaultdict(list)
+    all_langs = set()
+    
+    for file_path in csv_files:
+        parent_dir = os.path.dirname(file_path)
+        lang_pair = os.path.basename(parent_dir)
+        model_name = os.path.basename(file_path)
+        
+        all_langs.add(lang_pair)
+        model_files[model_name].append((lang_pair, file_path))
+        
+    problematic_models = {}
+    
+    print(f"Checking {len(model_files)} models across {len(all_langs)} language pairs...")
+    
+    for model_name, files in model_files.items():
+        # 1. Check if the model exists in ALL language folders
+        langs_for_this_model = set(lang for lang, _ in files)
+        missing_langs = all_langs - langs_for_this_model
+        
+        if missing_langs:
+            problematic_models[model_name] = f"Missing from language folder(s): {', '.join(missing_langs)}"
+            continue
+            
+        # 2. Check for empty values in 'translated' or 'ref' columns
+        for lang_pair, file_path in files:
+            try:
+                df = pd.read_csv(file_path)
+                if 'translated' not in df.columns or 'ref' not in df.columns:
+                    problematic_models[model_name] = f"Missing 'translated' or 'ref' column in {lang_pair}"
+                    break
+                    
+                # Check translated
+                is_empty_trans = (df['translated'].isna() | 
+                                  df['translated'].astype(str).str.strip().eq('') | 
+                                  df['translated'].astype(str).str.lower().eq('nan'))
+                
+                # Check ref (since similarity needs both)
+                is_empty_ref = (df['ref'].isna() | 
+                                df['ref'].astype(str).str.strip().eq('') | 
+                                df['ref'].astype(str).str.lower().eq('nan'))
+                
+                if is_empty_trans.any() or is_empty_ref.any():
+                    problematic_models[model_name] = f"Empty 'translated' or 'ref' values found in {lang_pair}"
+                    break
+                    
+            except Exception as e:
+                problematic_models[model_name] = f"Error reading {lang_pair}: {e}"
+                break
+
+    # Prompt user if problematic models are found
+    if problematic_models:
+        print(f"\n🚨 WARNING: Detected {len(problematic_models)} model(s) failing strict validation:")
+        for model, reason in problematic_models.items():
+            print(f"  - {model}: {reason}")
+            
+        while True:
+            response = input("\nDo you want to EXCLUDE these models entirely and proceed with the rest? (y/n): ").strip().lower()
+            if response in ['y', 'yes']:
+                print("\nExcluding invalid models...")
+                # Filter the original csv_files list to only include valid models
+                valid_csv_files = [f for f in csv_files if os.path.basename(f) not in problematic_models]
+                return valid_csv_files
+            elif response in ['n', 'no']:
+                print("\nOperation aborted by user.")
+                exit(0)
+            else:
+                print("Please enter 'y' to proceed or 'n' to abort.")
+    else:
+        print("✓ All models passed validation. Consistent across languages and fully populated.")
+        return csv_files
+
+
 # Auto-detect best available device
 if torch.cuda.is_available():
     device = "cuda"
@@ -37,94 +116,61 @@ else:
     device = "cpu"
     print(f"⚠ Warning: No GPU available, falling back to {device}")
 
-# ==============================================================================
-# MODEL LOADING - GPU optimized
-# ==============================================================================
-similarity_model_path = "sentence-transformers/all-mpnet-base-v2"
-print("\nLoading MPNet model for GPU...")
 
-model_load_start = time.time()
-try:
-    similarity_model = SentenceTransformer(
-        similarity_model_path,
-        device=device,
-        cache_folder="./model_cache",
-        trust_remote_code=False
-    )
-    print("✓ Model loaded successfully")
-except Exception as e:
-    print(f"⚠ Load failed: {e}")
-    print("Attempting offline mode...")
+def load_model_for_gpu():
+    """Wrapped model loading in a function so it only triggers if validation passes."""
+    similarity_model_path = "sentence-transformers/all-mpnet-base-v2"
+    print("\nLoading MPNet model for GPU...")
+
+    model_load_start = time.time()
     try:
-        similarity_model = SentenceTransformer(
+        model = SentenceTransformer(
             similarity_model_path,
             device=device,
             cache_folder="./model_cache",
-            local_files_only=True
+            trust_remote_code=False
         )
-        print("✓ Model loaded from local cache")
-    except Exception as e2:
-        print(f"⚠ Offline load failed: {e2}")
-        exit(1)
+        print("✓ Model loaded successfully")
+    except Exception as e:
+        print(f"⚠ Load failed: {e}")
+        print("Attempting offline mode...")
+        try:
+            model = SentenceTransformer(
+                similarity_model_path,
+                device=device,
+                cache_folder="./model_cache",
+                local_files_only=True
+            )
+            print("✓ Model loaded from local cache")
+        except Exception as e2:
+            print(f"⚠ Offline load failed: {e2}")
+            exit(1)
 
-model_load_time = time.time() - model_load_start
-print(f"✓ Model loaded in {model_load_time:.2f} seconds")
+    model_load_time = time.time() - model_load_start
+    print(f"✓ Model loaded in {model_load_time:.2f} seconds")
 
-# Configure model for GPU inference
-similarity_model.eval()
-similarity_model.half()  # Use FP16 for faster GPU inference
-print("✓ Model configured for FP16 inference on GPU")
+    # Configure model for GPU inference
+    model.eval()
+    model.half()  # Use FP16 for faster GPU inference
+    print("✓ Model configured for FP16 inference on GPU")
+    return model
 
-def clean_and_validate_csv(file_path: str, debug: bool = False) -> int:
+
+def ensure_similarity_column(file_path: str, debug: bool = False) -> int:
     """
-    Remove rows with empty or invalid 'translated' column
-    Returns number of rows removed
+    Ensures the similarity_score column exists. 
+    (Row dropping logic removed because global validation guarantees no empty rows).
     """
     try:
         df = pd.read_csv(file_path)
-        
-        # Check required columns
-        if 'translated' not in df.columns or 'ref' not in df.columns:
+        if 'similarity_score' not in df.columns:
+            df['similarity_score'] = np.nan
+            df.to_csv(file_path, index=False)
             if debug:
-                print(f"  Skipping (no columns): {os.path.basename(file_path)}")
-            return 0
-        
-        # Count rows before cleaning
-        original_count = len(df)
-        
-        # Remove rows where translated is empty, nan, or 'nan'
-        df_cleaned = df[
-            (df['translated'].notna()) & 
-            (df['translated'] != '') & 
-            (df['translated'].astype(str).str.strip() != '') &
-            (df['translated'].astype(str).str.lower() != 'nan')
-        ].copy()
-        
-        # Also ensure ref column is valid
-        df_cleaned = df_cleaned[
-            (df_cleaned['ref'].notna()) & 
-            (df_cleaned['ref'] != '') & 
-            (df_cleaned['ref'].astype(str).str.strip() != '') &
-            (df_cleaned['ref'].astype(str).str.lower() != 'nan')
-        ].copy()
-        
-        rows_removed = original_count - len(df_cleaned)
-        
-        if rows_removed > 0:
-            # Add similarity_score column if missing
-            if 'similarity_score' not in df_cleaned.columns:
-                df_cleaned['similarity_score'] = np.nan
-            
-            # Save the cleaned dataframe
-            df_cleaned.to_csv(file_path, index=False)
-            
-            if debug:
-                print(f"  Cleaned {os.path.basename(file_path)}: removed {rows_removed} invalid rows")
-        
-        return rows_removed
-        
+                print(f"  Added similarity_score column to {os.path.basename(file_path)}")
+        return 0
     except Exception as e:
-        print(f"  ✗ Error cleaning {file_path}: {e}")
+        print(f"  ✗ Error updating {file_path}: {e}")
         return 0
 
 def collect_all_missing_pairs(csv_files: List[str], debug: bool = False) -> Tuple[List[Dict], Dict[str, int]]:
@@ -133,31 +179,18 @@ def collect_all_missing_pairs(csv_files: List[str], debug: bool = False) -> Tupl
     Returns list of pairs with metadata and file statistics
     """
     print("\n" + "-"*70)
-    print("PHASE 1: Cleaning CSVs and collecting missing similarity pairs...")
+    print("PHASE 1: Scanning CSVs and collecting missing similarity pairs...")
     print("-"*70)
     
     all_pairs = []
     file_stats = defaultdict(int)
-    total_rows_removed = 0
     
-    for file_path in tqdm(csv_files, desc="Cleaning and scanning CSVs"):
-        # First clean the CSV
-        rows_removed = clean_and_validate_csv(file_path, debug)
-        total_rows_removed += rows_removed
+    for file_path in tqdm(csv_files, desc="Scanning CSVs"):
+        # Ensure column exists
+        ensure_similarity_column(file_path, debug)
         
         try:
             df = pd.read_csv(file_path)
-            
-            # Check required columns
-            if 'translated' not in df.columns or 'ref' not in df.columns:
-                if debug:
-                    print(f"  Skipping (no columns): {os.path.basename(file_path)}")
-                continue
-            
-            # Add column if missing
-            if 'similarity_score' not in df.columns:
-                df['similarity_score'] = np.nan
-                df.to_csv(file_path, index=False)  # Save once with new column
             
             # Find missing indices
             missing_mask = df['similarity_score'].isna() | (df['similarity_score'] == 0.0)
@@ -186,13 +219,12 @@ def collect_all_missing_pairs(csv_files: List[str], debug: bool = False) -> Tupl
     
     total_pairs = len(all_pairs)
     print(f"\n✓ Found {total_pairs} pairs needing calculation across {len(csv_files)} files")
-    print(f"  Total invalid rows removed: {total_rows_removed}")
     print(f"  Complete files: {file_stats['complete']}")
     print(f"  Pending calculations: {file_stats['pending']}")
     
     return all_pairs, dict(file_stats)
 
-def process_all_pairs_batch(pairs: List[Dict], batch_size: int = 256, debug: bool = False) -> List[Dict]:
+def process_all_pairs_batch(pairs: List[Dict], similarity_model, batch_size: int = 256, debug: bool = False) -> List[Dict]:
     """
     Phase 2: Process all pairs in centralized batches for maximum efficiency
     """
@@ -217,8 +249,8 @@ def process_all_pairs_batch(pairs: List[Dict], batch_size: int = 256, debug: boo
     
     with torch.no_grad():
         for i in tqdm(range(0, len(pairs), batch_size), 
-                     desc="Calculating similarities", 
-                     total=total_batches):
+                      desc="Calculating similarities", 
+                      total=total_batches):
             batch_end = min(i + batch_size, len(pairs))
             batch_translated = all_translated[i:batch_end]
             batch_ref = all_refs[i:batch_end]
@@ -316,7 +348,7 @@ def find_csv_files(folder_path: str) -> List[str]:
 
 def main():
     print("\n" + "="*70)
-    print("SIMILARITY SCORE CALCULATOR - GPU OPTIMIZED (WITH CLEANING)")
+    print("SIMILARITY SCORE CALCULATOR - GPU OPTIMIZED (STRICT VALIDATION)")
     print("="*70)
     print(f"Output folder: {OUTPUT_COMBINED_PATH}")
     print(f"Batch size: {BATCH_SIZE}")
@@ -334,18 +366,29 @@ def main():
     if not csv_files:
         print("⚠ No CSV files found!")
         return
-    
     print(f"Found {len(csv_files)} CSV files")
     
-    # Phase 1: Clean CSVs and collect all missing pairs
-    all_pairs, stats = collect_all_missing_pairs(csv_files, DEBUG_MODE)
+    # =================================================================
+    # NEW: Run Global Validation BEFORE loading model or processing
+    # =================================================================
+    valid_csv_files = validate_dataset_globally(csv_files)
+    
+    if not valid_csv_files:
+        print("⚠ No valid CSV files remaining after validation. Exiting.")
+        return
+        
+    # Phase 1: Scan CSVs and collect all missing pairs
+    all_pairs, stats = collect_all_missing_pairs(valid_csv_files, DEBUG_MODE)
     
     if not all_pairs:
         print("\n✓ All similarity scores are already calculated!")
         return
     
+    # Only load the heavy GPU model if we actually have valid pairs to process
+    similarity_model = load_model_for_gpu()
+    
     # Phase 2: Process all pairs
-    results = process_all_pairs_batch(all_pairs, BATCH_SIZE, DEBUG_MODE)
+    results = process_all_pairs_batch(all_pairs, similarity_model, BATCH_SIZE, DEBUG_MODE)
     
     # Phase 3: Update all CSVs
     update_csvs_with_results(results, DEBUG_MODE)
