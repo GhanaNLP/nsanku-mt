@@ -12,7 +12,7 @@ from typing import List, Dict, Tuple
 # ==============================================================================
 # CONFIGURATION
 # ==============================================================================
-OUTPUT_COMBINED_PATH = "output_combined"
+OUTPUT_COMBINED_PATH = "output"
 BATCH_SIZE = 256  # Increased for GPU (much faster processing)
 DEBUG_MODE = True
 # ==============================================================================
